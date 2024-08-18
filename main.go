@@ -174,9 +174,6 @@ func edit_top(bot *tgbotapi.BotAPI, gamblers map[int64]*Gambler) (string, error)
 		return "", err
 	}
 	edit_top := tgbotapi.NewEditMessageText(chatid_top, int(msgid_top), newtop)
-	_, err = bot.Send(edit_top)
-	if err != nil {
-		return "", err
-	}
+	bot.Send(edit_top)
 	return newtop, nil
 }
