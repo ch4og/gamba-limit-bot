@@ -20,6 +20,7 @@ import (
 		gamble_hour int64
 		username string
 		wins int
+		all_gambles int
 	}
 func main() {
 	err := godotenv.Load()
@@ -70,7 +71,7 @@ func main() {
 						gambler.gamble_hour = time.Now().Unix()
 					}
 					if gambler.gambles > 3 {
-						msg_text := fmt.Sprintf("@%s ЛИМИТ ГАМБЫ ПРЕВЫШЕН!\nПопробуйте снова через %.0f минут!\n", update.Message.From.UserName, 60 - time.Since(time.Unix(gambler.gamble_hour, 0)).Minutes())
+						msg_text := fmt.Sprintf("@%s ЛИМИТ ГАМБЫ ПРЕВЫШЕН!\nПравила буна: 3 крутки в час\n\nПопробуйте снова через %.0f минут!\n", update.Message.From.UserName, 60 - time.Since(time.Unix(gambler.gamble_hour, 0)).Minutes())
 						msg := tgbotapi.NewMessage(update.Message.Chat.ID, msg_text)
 						del_gamba := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
 						bot.Send(del_gamba)
@@ -92,6 +93,7 @@ func main() {
 								log.Fatal(err)
 							}
 						}
+						gambler.all_gambles++
 						err = save_gamba(gamblers)
 						if err != nil {
 							log.Fatal(err)
@@ -112,7 +114,7 @@ func save_gamba(gamblers map[int64]*Gambler) error {
     defer file.Close()
 
     for k, v := range gamblers {
-        _, err = file.WriteString(fmt.Sprintf("%d %d %d %s %d\n", k, v.gambles, v.gamble_hour, v.username, v.wins))
+        _, err = file.WriteString(fmt.Sprintf("%d %d %d %s %d %d\n", k, v.gambles, v.gamble_hour, v.username, v.wins, v.all_gambles))
         if err != nil {
             return err
         }
@@ -136,12 +138,14 @@ func load_gamba() (map[int64]*Gambler, error) {
         gambles, _ := strconv.Atoi(fields[1])
         gamble_hour, _ := strconv.ParseInt(fields[2], 10, 64)
         wins, _ := strconv.Atoi(fields[4])
+        all_gambles, _ := strconv.Atoi(fields[5])
         v := &Gambler{
             userid:    k,
             gambles:   gambles,
             gamble_hour: gamble_hour,
             username:  fields[3],
             wins:      wins,
+			all_gambles: all_gambles,
         }
         gamblers[k] = v
     }
@@ -162,7 +166,7 @@ func edit_top(bot *tgbotapi.BotAPI, gamblers map[int64]*Gambler) (string, error)
 
 	newtop = "Правила буна: 3 крутки в час\n\n🎰 ТОП ГАМБЫ\n\n"
 	for _, gambler := range gamblerSlice {
-		newtop += fmt.Sprintf("%s - %d побед\n", gambler.username, gambler.wins)
+		newtop += fmt.Sprintf("%s - %d побед - %d круток\n", gambler.username, gambler.wins, gambler.all_gambles)
 	}
 	top_msg := strings.Split(os.Getenv("STATS_MSGID"), ":")
 	chatid_top, err := strconv.ParseInt(top_msg[0], 10, 64)
