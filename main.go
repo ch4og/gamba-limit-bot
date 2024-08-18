@@ -23,7 +23,7 @@ import (
 		all_gambles int
 	}
 func main() {
-	// TODO: sort by luck && command to enable pm notifications about timer reset
+	// TODO: command to enable pm notifications about timer reset
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -160,7 +160,16 @@ func new_top(gamblers map[int64]*Gambler) (string) {
 	}
 
 	sort.Slice(gamblerSlice, func(i, j int) bool {
-		return gamblerSlice[i].wins > gamblerSlice[j].wins
+		winrateI := float64(gamblerSlice[i].wins) / float64(gamblerSlice[i].all_gambles)
+		winrateJ := float64(gamblerSlice[j].wins) / float64(gamblerSlice[j].all_gambles)
+	
+		if gamblerSlice[i].wins > gamblerSlice[j].wins {
+			return true
+		} else if gamblerSlice[i].wins == gamblerSlice[j].wins {
+			return winrateI > winrateJ
+		} else {
+			return false
+		}
 	})
 
 	newtop = "Правила буна: 3 крутки в час\n\n🎰 ТОП ГАМБЫ\n\n"
