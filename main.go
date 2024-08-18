@@ -45,10 +45,8 @@ func main() {
 
 	updates := bot.GetUpdatesChan(u)
 	for update := range updates {
-		//mesage := tgbotapi.NewMessage(update.Message.Chat.ID, "test message")
-		//bot.Send(mesage)
 		if update.Message.Text == "/top" {
-			top_text, err := edit_top(bot, gamblers)
+			top_text := new_top(gamblers)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -88,10 +86,6 @@ func main() {
 						switch update.Message.Dice.Value {
 						case 1, 22, 43, 64:
 							gambler.wins++
-							_, err = edit_top(bot, gamblers)
-							if err != nil {
-								log.Fatal(err)
-							}
 						}
 						gambler.all_gambles++
 						err = save_gamba(gamblers)
@@ -153,7 +147,7 @@ func load_gamba() (map[int64]*Gambler, error) {
     return gamblers, nil
 }
 
-func edit_top(bot *tgbotapi.BotAPI, gamblers map[int64]*Gambler) (string, error) {
+func new_top(gamblers map[int64]*Gambler) (string) {
 	var newtop = ""
 	var gamblerSlice []*Gambler
 	for _, gambler := range gamblers {
@@ -168,16 +162,5 @@ func edit_top(bot *tgbotapi.BotAPI, gamblers map[int64]*Gambler) (string, error)
 	for _, gambler := range gamblerSlice {
 		newtop += fmt.Sprintf("%s - %d побед - %d круток\n", gambler.username, gambler.wins, gambler.all_gambles)
 	}
-	top_msg := strings.Split(os.Getenv("STATS_MSGID"), ":")
-	chatid_top, err := strconv.ParseInt(top_msg[0], 10, 64)
-	if err != nil {
-		return "", err
-	}
-	msgid_top, err := strconv.ParseInt(top_msg[1], 10, 64)
-	if err != nil {
-		return "", err
-	}
-	edit_top := tgbotapi.NewEditMessageText(chatid_top, int(msgid_top), newtop)
-	bot.Send(edit_top)
-	return newtop, nil
+	return newtop
 }
