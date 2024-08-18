@@ -23,6 +23,7 @@ import (
 		all_gambles int
 	}
 func main() {
+	// TODO: sort by luck && command to enable pm notifications about timer reset
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -69,8 +70,12 @@ func main() {
 						gambler.gamble_hour = time.Now().Unix()
 					}
 					if gambler.gambles > 3 {
-						msg_text := fmt.Sprintf("@%s ЛИМИТ ГАМБЫ ПРЕВЫШЕН!\nПравила буна: 3 крутки в час\n\nПопробуйте снова через %.0f минут!\n", update.Message.From.UserName, 60 - time.Since(time.Unix(gambler.gamble_hour, 0)).Minutes())
+						username := update.Message.From.UserName
+						minutes := int(60 - time.Since(time.Unix(gambler.gamble_hour, 0)).Minutes())
+						seconds := int(time.Since(time.Unix(gambler.gamble_hour, 0)).Seconds()) % 60
+						msg_text := fmt.Sprintf("%s ЛИМИТ ГАМБЫ ПРЕВЫШЕН!\nПравила буна: 3 крутки в час\n\nПопробуйте снова через %d мин %d сек!\n", username, minutes, seconds)
 						msg := tgbotapi.NewMessage(update.Message.Chat.ID, msg_text)
+						msg.DisableNotification = true
 						del_gamba := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
 						bot.Send(del_gamba)
 						msg_sent, err := bot.Send(msg)
@@ -79,7 +84,7 @@ func main() {
 						}
 						del_msg := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, msg_sent.MessageID)
 						go func() {
-							time.Sleep(time.Duration(3 *time.Second))
+							time.Sleep(time.Duration(25 / 10  * time.Second))
 							bot.Send(del_msg)
 						}()
 					} else {
