@@ -21,10 +21,10 @@ import (
 		username string
 		wins int
 		all_gambles int
-		chatid int64
 	}
 func main() {
 	// TODO: command to enable pm notifications about timer reset
+	// TODO: refactoring
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -48,7 +48,7 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 	for update := range updates {
 		if update.Message.Text == "/top" {
-			top_text := new_top(gamblers, update.Message.Chat.ID)
+			top_text := new_top(gamblers, bot, update.Message.Chat.ID)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -61,7 +61,7 @@ func main() {
 					username := update.Message.From.UserName
 					gambler, ok := gamblers[userid]
 					if !ok {
-						gambler = &Gambler{userid: userid, gambles: 0, gamble_hour: time.Now().Unix(), username: username, wins: 0, all_gambles: 0, chatid: update.Message.Chat.ID}
+						gambler = &Gambler{userid: userid, gambles: 0, gamble_hour: time.Now().Unix(), username: username, wins: 0, all_gambles: 0}
 						gamblers[userid] = gambler
 					}
 					if time.Since(time.Unix(gambler.gamble_hour, 0)).Minutes() < 60 {
@@ -74,7 +74,7 @@ func main() {
 						username := update.Message.From.UserName
 						minutes := int(60 - time.Since(time.Unix(gambler.gamble_hour, 0)).Minutes())
 						seconds := 60 - (int(time.Since(time.Unix(gambler.gamble_hour, 0)).Seconds()) % 60)
-						msg_text := fmt.Sprintf("%s ЛИМИТ ГАМБЫ ПРЕВЫШЕН!\nПравила буна: 3 крутки в час\n\nПопробуйте снова через %d мин %d сек!\n", username, minutes, seconds)
+						msg_text := fmt.Sprintf("%s ЛИМИТ ГАМБЫ ПРЕВЫШЕН!\nПравила гамбы: 3 крутки в час\n\nПопробуйте снова через %d мин %d сек!\n", username, minutes, seconds)
 						msg := tgbotapi.NewMessage(update.Message.Chat.ID, msg_text)
 						msg.DisableNotification = true
 						del_gamba := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
@@ -114,7 +114,7 @@ func save_gamba(gamblers map[int64]*Gambler) error {
     defer file.Close()
 
     for k, v := range gamblers {
-        _, err = file.WriteString(fmt.Sprintf("%d %d %d %s %d %d %d\n", k, v.gambles, v.gamble_hour, v.username, v.wins, v.all_gambles, v.chatid))
+        _, err = file.WriteString(fmt.Sprintf("%d %d %d %s %d %d\n", k, v.gambles, v.gamble_hour, v.username, v.wins, v.all_gambles))
         if err != nil {
             return err
         }
@@ -137,7 +137,6 @@ func load_gamba() (map[int64]*Gambler, error) {
         k, _ := strconv.ParseInt(fields[0], 10, 64)
         gambles, _ := strconv.Atoi(fields[1])
         gamble_hour, _ := strconv.ParseInt(fields[2], 10, 64)
-		chatid, _ := strconv.ParseInt(fields[6], 10, 64)
         wins, _ := strconv.Atoi(fields[4])
         all_gambles, _ := strconv.Atoi(fields[5])
         v := &Gambler{
@@ -147,7 +146,6 @@ func load_gamba() (map[int64]*Gambler, error) {
             username:  fields[3],
             wins:      wins,
 			all_gambles: all_gambles,
-			chatid: chatid,
         }
         gamblers[k] = v
     }
@@ -155,14 +153,15 @@ func load_gamba() (map[int64]*Gambler, error) {
     return gamblers, nil
 }
 
-func new_top(gamblers map[int64]*Gambler, chatid int64) (string) {
+func new_top(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatid int64) (string) {
 	var newtop = ""
 	var gamblerSlice []*Gambler
 	for _, gambler := range gamblers {
-		if gambler.chatid == chatid {
+		a, _ := bot.GetChatMember(tgbotapi.GetChatMemberConfig{ChatConfigWithUser: tgbotapi.ChatConfigWithUser{ChatID: chatid, UserID: gambler.userid}})
+		if a.Status == "administrator" || a.Status == "creator" || a.Status == "member" {
 			gamblerSlice = append(gamblerSlice, gambler)
 		}
-	}
+		}
 
 	sort.Slice(gamblerSlice, func(i, j int) bool {
 		winrateI := float64(gamblerSlice[i].wins) / float64(gamblerSlice[i].all_gambles)
@@ -177,7 +176,7 @@ func new_top(gamblers map[int64]*Gambler, chatid int64) (string) {
 		}
 	})
 
-	newtop = "Правила буна: 3 крутки в час\n\n🎰 ТОП ГАМБЫ\n\n"
+	newtop = "Правила гамбы: 3 крутки в час\n\n🎰 ТОП ГАМБЫ\n\n"
 	for _, gambler := range gamblerSlice {
 		newtop += fmt.Sprintf("%s - %d побед - %d круток\n", gambler.username, gambler.wins, gambler.all_gambles)
 	}
