@@ -29,11 +29,10 @@ type Gambler struct {
 	Username    string
 	Wins        int
 	AllGambles  int
+	NotifyTimer bool
+	LastNotify  int64
 }
-const limit_delay = 2.5
 func main() {
-	// TODO: command to enable pm notifications about timer reset (maybe)
-	
 	// Load .env file
 	err := godotenv.Load()
 	handleError(err)
@@ -44,6 +43,29 @@ func main() {
 	handleError(err)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+
+	go func ()  {
+		for {
+			time.Sleep(time.Second * 20)
+			gamblers, err := loadGamblerData()
+			handleError(err)
+			for _, gambler := range gamblers {
+				if gambler.NotifyTimer {
+					sinceGamble := time.Since(time.Unix(gambler.GambleTime, 0))
+					if sinceGamble.Minutes() > 60 && time.Since(time.Unix(gambler.LastNotify, 0)).Minutes() > 60 {
+						err = notify(bot, gambler)
+						if err != nil {
+							log.Printf("Can't send message to %s", gambler.Username)
+						} 
+						gambler.LastNotify = time.Now().Unix()
+						saveGamblerData(gamblers)
+					} 
+				}
+			}
+
+		}
+	}()
 
 	// Create update channel
 	u := tgbotapi.NewUpdate(0)
@@ -62,6 +84,51 @@ func main() {
 			gamblers, err := loadGamblerData()
 			handleError(err)
 			err = handleTopCommand(bot, update.Message.Chat.ID, update.Message.MessageID, gamblers)
+			handleError(err)
+		}
+
+		// Handle /notify command
+		if update.Message.Text == "/notify" {
+			gamblers, err := loadGamblerData()
+			handleError(err)
+
+			// Find the user's gambler
+			gambler, ok := gamblers[update.Message.From.ID]
+			if !ok {
+				gambler = &Gambler{
+					UserID:      update.Message.From.ID,
+					Gambles:     0,
+					GambleTime:  time.Now().Unix(),
+					Username:    update.Message.From.UserName,
+					Wins:        0,
+					AllGambles:  0,
+					NotifyTimer: false,
+					LastNotify:  0,
+				}
+				gamblers[update.Message.From.ID] = gambler
+			}
+
+			// Toggle the notify timer
+			gambler.NotifyTimer = !gambler.NotifyTimer
+
+			// Save the gambler
+			err = saveGamblerData(gamblers)
+			handleError(err)
+
+			// Send a message with a confirmation
+			var msg_text string
+			if gambler.NotifyTimer {
+				msg_text = fmt.Sprintf(
+					"%s, вы включили уведомления о сбросе таймера гамбы.\n\nНапишите в [ЛС боту](https://t.me/gamba_bunker_bot) любое сообщение, чтобы разрешить отправку уведомлений.",
+					gambler.Username,
+				)
+			} else {
+				msg_text = fmt.Sprintf(
+					"%s, вы отключили уведомления о сбросе таймера гамбы.",
+					gambler.Username,
+				)
+			}
+			err = sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 20, true)
 			handleError(err)
 		}
 
@@ -86,7 +153,7 @@ func handleTopCommand(bot *tgbotapi.BotAPI, chatID int64, msgID int, gamblers ma
 	topText := getTopGamblers(gamblers, bot, chatID)
 
 	// Send the top text with a delay of 60 seconds and handle any errors
-	err := sendMessageAndDeleteAfterDelay(bot, chatID, msgID, topText, 60)
+	err := sendMessageAndDeleteAfterDelay(bot, chatID, msgID, topText, 60, false)
 	return err
 }
 
@@ -105,6 +172,8 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 			Username:    update.Message.From.UserName,
 			Wins:        0,
 			AllGambles:  0,
+			NotifyTimer: false,
+			LastNotify:  0,
 		}
 		gamblers[update.Message.From.ID] = gambler
 	}
@@ -130,7 +199,7 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 			gambler.Username, minutes, seconds,
 		)
 
-		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, limit_delay)
+		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 2.5, false)
 		gambler.Gambles = 3 // Reset the number of gambles
 		return err
 	} else {
@@ -159,13 +228,15 @@ func saveGamblerData(gamblers map[int64]*Gambler) error {
 
     for UserID, gambler := range gamblers {
         // Format the line to be written to the file.
-        line := fmt.Sprintf("%d %d %d %s %d %d\n",
+        line := fmt.Sprintf("%d %d %d %s %d %d %t %d\n",
             UserID,
             gambler.Gambles,
             gambler.GambleTime,
             gambler.Username,
             gambler.Wins,
             gambler.AllGambles,
+			gambler.NotifyTimer,
+			gambler.LastNotify,
         )
 
 		// Write the line to the file.
@@ -219,6 +290,15 @@ func loadGamblerData() (map[int64]*Gambler, error) {
 			return nil, err
 		}
 
+		NotifyTimer, err := strconv.ParseBool(fields[6])
+		if err != nil {
+			return nil, err
+		}
+
+		LastNotify, err := strconv.ParseInt(fields[7], 10, 64)
+		if err != nil {
+			return nil, err
+		}
 		// Create a new gambler and add it to the map.
 		gambler := &Gambler{
 			UserID:      UserID,
@@ -227,6 +307,8 @@ func loadGamblerData() (map[int64]*Gambler, error) {
 			Username:    fields[3],
 			Wins:        Wins,
 			AllGambles:  AllGambles,
+			NotifyTimer: NotifyTimer,
+			LastNotify:  LastNotify,
 		}
 		gamblers[UserID] = gambler
 	}
@@ -274,17 +356,20 @@ func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID in
 
 	return topGamblersText
 }
-func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageID int, text string, delay_time float64) error {
+func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageID int, text string, delay_time float64 , isMarkdown bool) error {
 	// Create the message to send
 	var deleteSticker tgbotapi.DeleteMessageConfig
 	doStickerExist := false
 	message := tgbotapi.NewMessage(chatID, text)
 	message.DisableNotification = true 
+	if isMarkdown {
+		message.ParseMode = "Markdown"
+	}
 
 	// Delete the original message
 	bot.Send(tgbotapi.NewDeleteMessage(chatID, messageID))
 
-	if rand.IntN(10) == 4 && delay_time == limit_delay {
+	if rand.IntN(5) == 4 && delay_time == 2.5 {
 		doStickerExist = true
 		stickerset, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{Name: "ch4ogpack_by_fStikBot"})
 		if err != nil {
@@ -318,6 +403,16 @@ func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageI
 	}()
 
 	return nil
+}
+func notify(bot *tgbotapi.BotAPI, gambler *Gambler) (err error) {
+	msg_text := fmt.Sprintf(
+		"@%s, время гамбы!\n\nОтключить уведомления можно с помощью команды /notify",
+		gambler.Username,
+	)
+
+	notification := tgbotapi.NewMessage(gambler.UserID, msg_text)
+	_, err = bot.Send(notification)
+	return err
 }
 func handleError(err error) {
 	if err != nil {
