@@ -251,6 +251,9 @@ func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID in
 
 	// Sort the top gamblers based on their win count and winrate.
 	sort.Slice(topGamblers, func(i, j int) bool {
+		if topGamblers[i].Wins == 0 && topGamblers[j].Wins == 0 {
+			return topGamblers[i].AllGambles < topGamblers[j].AllGambles
+		}
 		winRateI := float64(topGamblers[i].Wins) / float64(topGamblers[i].AllGambles)
 		winRateJ := float64(topGamblers[j].Wins) / float64(topGamblers[j].AllGambles)
 
