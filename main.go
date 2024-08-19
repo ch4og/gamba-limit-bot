@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"os"
 	"sort"
 	"strconv"
@@ -21,14 +22,15 @@ import (
 // Username - the username of the user
 // Wins - the number of times the user has won
 // AllGambles - the total number of gambles the user has made
-	type Gambler struct {
-		UserID      int64
-		Gambles     int
-		GambleTime  int64
-		Username    string
-		Wins        int
-		AllGambles  int
-	}
+type Gambler struct {
+	UserID      int64
+	Gambles     int
+	GambleTime  int64
+	Username    string
+	Wins        int
+	AllGambles  int
+}
+const limit_delay = 2.5
 func main() {
 	// TODO: command to enable pm notifications about timer reset (maybe)
 	
@@ -124,10 +126,11 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 
 		// Send a message with the remaining time
 		msg_text := fmt.Sprintf(
-			"%s, лимит гамбинга превышен!\nПравила гамбы: 3 крутки в час\n\nПопробуйте снова через %d минут %d секунд!\n",
+			"%s, лимит гамбы превышен!\nПравила гамбы: 3 крутки в час\n\nПопробуйте снова через %d минут %d секунд!\n",
 			gambler.Username, minutes, seconds,
 		)
-		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 2.5)
+
+		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, limit_delay)
 		gambler.Gambles = 3 // Reset the number of gambles
 		return err
 	} else {
@@ -270,12 +273,28 @@ func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID in
 }
 func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageID int, text string, delay_time float64) error {
 	// Create the message to send
+	var deleteSticker tgbotapi.DeleteMessageConfig
+	doStickerExist := false
 	message := tgbotapi.NewMessage(chatID, text)
 	message.DisableNotification = true 
 
 	// Delete the original message
 	bot.Send(tgbotapi.NewDeleteMessage(chatID, messageID))
 
+	if rand.IntN(10) == 4 && delay_time == limit_delay {
+		doStickerExist = true
+		stickerset, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{Name: "ch4ogpack_by_fStikBot"})
+		if err != nil {
+			return err
+		}
+		stickerMsg := tgbotapi.NewSticker(chatID, tgbotapi.FileID(stickerset.Stickers[0].FileID))
+		stickerMsg.DisableNotification = true
+		sentSticker, err := bot.Send(stickerMsg)
+		if err != nil {
+			return err
+		}
+		deleteSticker = tgbotapi.NewDeleteMessage(chatID, sentSticker.MessageID)
+	}
 	// Send the message and get the sent message
 	sentMessage, err := bot.Send(message)
 	if err != nil {
@@ -289,6 +308,9 @@ func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageI
 	go func() {
 		delay := time.Duration(delay_time) * time.Second
 		time.Sleep(delay)
+		if doStickerExist {
+			bot.Send(deleteSticker)
+		}
 		bot.Send(deleteMessage)
 	}()
 
