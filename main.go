@@ -32,6 +32,7 @@ type Gambler struct {
 	NotifyTimer bool
 	Notified    bool
 }
+
 func main() {
 	// Load .env file
 	err := godotenv.Load()
@@ -44,8 +45,7 @@ func main() {
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-
-	go func ()  {
+	go func() {
 		for {
 			time.Sleep(time.Second * 20)
 			gamblers, err := loadGamblerData()
@@ -61,7 +61,7 @@ func main() {
 							gambler.Notified = true
 						}
 						saveGamblerData(gamblers)
-					} 
+					}
 				}
 			}
 
@@ -218,38 +218,38 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 	}
 }
 func saveGamblerData(gamblers map[int64]*Gambler) error {
-    // Define the filename for the data file.
-    const filename = "gamba.txt"
+	// Define the filename for the data file.
+	const filename = "gamba.txt"
 
-    // Create the file for writing.
-    file, err := os.Create(filename)
-    if err != nil {
-        return err
-    }
-    defer file.Close()
+	// Create the file for writing.
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-    for UserID, gambler := range gamblers {
-        // Format the line to be written to the file.
-        line := fmt.Sprintf("%d %d %d %s %d %d %t %t\n",
-            UserID,
-            gambler.Gambles,
-            gambler.GambleTime,
-            gambler.Username,
-            gambler.Wins,
-            gambler.AllGambles,
-	    gambler.NotifyTimer,
-	    gambler.Notified,
-        )
+	for UserID, gambler := range gamblers {
+		// Format the line to be written to the file.
+		line := fmt.Sprintf("%d %d %d %s %d %d %t %t\n",
+			UserID,
+			gambler.Gambles,
+			gambler.GambleTime,
+			gambler.Username,
+			gambler.Wins,
+			gambler.AllGambles,
+			gambler.NotifyTimer,
+			gambler.Notified,
+		)
 
 		// Write the line to the file.
-        _, err = file.WriteString(line)
-        if err != nil {
-            return err
-        }
-    }
+		_, err = file.WriteString(line)
+		if err != nil {
+			return err
+		}
+	}
 
-    // Return no error if the data was successfully saved.
-    return nil
+	// Return no error if the data was successfully saved.
+	return nil
 }
 func loadGamblerData() (map[int64]*Gambler, error) {
 	const filename = "gamba.txt"
@@ -358,12 +358,12 @@ func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID in
 
 	return topGamblersText
 }
-func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageID int, text string, delay_time float64 , isMarkdown bool) error {
+func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageID int, text string, delay_time float64, isMarkdown bool) error {
 	// Create the message to send
 	var deleteSticker tgbotapi.DeleteMessageConfig
 	doStickerExist := false
 	message := tgbotapi.NewMessage(chatID, text)
-	message.DisableNotification = true 
+	message.DisableNotification = true
 	if isMarkdown {
 		message.ParseMode = "Markdown"
 	}
@@ -371,7 +371,7 @@ func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageI
 	// Delete the original message
 	bot.Send(tgbotapi.NewDeleteMessage(chatID, messageID))
 
-	if rand.IntN(5) == 4 && delay_time == 2.5 {
+	if rand.IntN(20) == 4 && delay_time == 2.5 {
 		doStickerExist = true
 		stickerset, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{Name: "ch4ogpack_by_fStikBot"})
 		if err != nil {
