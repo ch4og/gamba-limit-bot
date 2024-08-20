@@ -53,7 +53,8 @@ func main() {
 			for _, gambler := range gamblers {
 				if gambler.NotifyTimer {
 					sinceGamble := time.Since(time.Unix(gambler.GambleTime, 0))
-					if sinceGamble.Minutes() > 60 && time.Since(time.Unix(gambler.LastNotify, 0)).Minutes() > 60 {
+					sinceNotify := time.Since(time.Unix(gambler.LastNotify, 0))
+					if sinceGamble.Minutes() > 60 && sinceNotify.Minutes() > 240 {
 						err = notify(bot, gambler)
 						if err != nil {
 							log.Printf("Can't send message to %s", gambler.Username)
