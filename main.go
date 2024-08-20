@@ -30,7 +30,7 @@ type Gambler struct {
 	Wins        int
 	AllGambles  int
 	NotifyTimer bool
-	LastNotify  int64
+	Notified    bool
 }
 func main() {
 	// Load .env file
@@ -53,13 +53,13 @@ func main() {
 			for _, gambler := range gamblers {
 				if gambler.NotifyTimer {
 					sinceGamble := time.Since(time.Unix(gambler.GambleTime, 0))
-					sinceNotify := time.Since(time.Unix(gambler.LastNotify, 0))
-					if sinceGamble.Minutes() > 60 && sinceNotify.Minutes() > 240 {
+					if sinceGamble.Minutes() > 60 && !gambler.Notified {
 						err = notify(bot, gambler)
 						if err != nil {
 							log.Printf("Can't send message to %s", gambler.Username)
-						} 
-						gambler.LastNotify = time.Now().Unix()
+						} else {
+							gambler.Notified = true
+						}
 						saveGamblerData(gamblers)
 					} 
 				}
@@ -104,7 +104,7 @@ func main() {
 					Wins:        0,
 					AllGambles:  0,
 					NotifyTimer: false,
-					LastNotify:  0,
+					Notified:    false,
 				}
 				gamblers[update.Message.From.ID] = gambler
 			}
@@ -174,7 +174,7 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 			Wins:        0,
 			AllGambles:  0,
 			NotifyTimer: false,
-			LastNotify:  0,
+			Notified:    false,
 		}
 		gamblers[update.Message.From.ID] = gambler
 	}
@@ -183,6 +183,7 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 	timeSince := time.Since(time.Unix(gambler.GambleTime, 0))
 	if timeSince.Minutes() < 60 {
 		gambler.Gambles++ // Increment the number of gambles
+		gambler.Notified = false
 	} else {
 		gambler.Gambles = 1 // Reset the number of gambles
 		gambler.GambleTime = time.Now().Unix()
@@ -229,15 +230,15 @@ func saveGamblerData(gamblers map[int64]*Gambler) error {
 
     for UserID, gambler := range gamblers {
         // Format the line to be written to the file.
-        line := fmt.Sprintf("%d %d %d %s %d %d %t %d\n",
+        line := fmt.Sprintf("%d %d %d %s %d %d %t %t\n",
             UserID,
             gambler.Gambles,
             gambler.GambleTime,
             gambler.Username,
             gambler.Wins,
             gambler.AllGambles,
-			gambler.NotifyTimer,
-			gambler.LastNotify,
+	    gambler.NotifyTimer,
+	    gambler.Notified,
         )
 
 		// Write the line to the file.
@@ -296,7 +297,7 @@ func loadGamblerData() (map[int64]*Gambler, error) {
 			return nil, err
 		}
 
-		LastNotify, err := strconv.ParseInt(fields[7], 10, 64)
+		Notified, err := strconv.ParseBool(fields[7])
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +310,7 @@ func loadGamblerData() (map[int64]*Gambler, error) {
 			Wins:        Wins,
 			AllGambles:  AllGambles,
 			NotifyTimer: NotifyTimer,
-			LastNotify:  LastNotify,
+			Notified:    Notified,
 		}
 		gamblers[UserID] = gambler
 	}
