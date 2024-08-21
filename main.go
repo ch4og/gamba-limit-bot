@@ -255,7 +255,7 @@ func saveGamblerData(gamblers map[int64]*Gambler, gambaPull int, gambaPullUserna
 			return err
 		}
 		defer file2.Close()
-		_, err = file2.WriteString(gambaPullUsername + " " + strconv.Itoa(gambaPull) + ";")
+		_, err = file2.WriteString(gambaPullUsername + " " + strconv.Itoa(gambaPull) + "\n")
 		if err != nil {
 			return err
 		}
