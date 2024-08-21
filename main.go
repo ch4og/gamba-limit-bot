@@ -213,7 +213,7 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 		gambler.AllGambles++
 
 		// Save the gambler's stats
-		err := saveGamblerData(gamblers, 0, "")
+		err := saveGamblerData(gamblers, update.Message.Dice.Value, update.Message.From.UserName)
 		return err
 	}
 }
