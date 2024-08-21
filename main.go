@@ -60,7 +60,7 @@ func main() {
 						} else {
 							gambler.Notified = true
 						}
-						saveGamblerData(gamblers)
+						saveGamblerData(gamblers, 0, "")
 					}
 				}
 			}
@@ -113,7 +113,7 @@ func main() {
 			gambler.NotifyTimer = !gambler.NotifyTimer
 
 			// Save the gambler
-			err = saveGamblerData(gamblers)
+			err = saveGamblerData(gamblers, 0, "")
 			handleError(err)
 
 			// Send a message with a confirmation
@@ -213,11 +213,11 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 		gambler.AllGambles++
 
 		// Save the gambler's stats
-		err := saveGamblerData(gamblers)
+		err := saveGamblerData(gamblers, 0, "")
 		return err
 	}
 }
-func saveGamblerData(gamblers map[int64]*Gambler) error {
+func saveGamblerData(gamblers map[int64]*Gambler, gambaPull int, gambaPullUsername string) error {
 	// Define the filename for the data file.
 	const filename = "gamba.txt"
 
@@ -243,6 +243,19 @@ func saveGamblerData(gamblers map[int64]*Gambler) error {
 
 		// Write the line to the file.
 		_, err = file.WriteString(line)
+		if err != nil {
+			return err
+		}
+
+	}
+	if gambaPull > 0 && gambaPullUsername != "" {
+		const filename2 = "gamba_pulls.txt"
+		file2, err := os.Create(filename2)
+		if err != nil {
+			return err
+		}
+		defer file2.Close()
+		_, err = file2.WriteString(gambaPullUsername + " " + strconv.Itoa(gambaPull))
 		if err != nil {
 			return err
 		}
