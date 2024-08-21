@@ -250,12 +250,12 @@ func saveGamblerData(gamblers map[int64]*Gambler, gambaPull int, gambaPullUserna
 	}
 	if gambaPull > 0 && gambaPullUsername != "" {
 		const filename2 = "gamba_pulls.txt"
-		file2, err := os.Create(filename2)
+		file2, err := os.OpenFile(filename2, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			return err
 		}
 		defer file2.Close()
-		_, err = file2.WriteString(gambaPullUsername + " " + strconv.Itoa(gambaPull))
+		_, err = file2.WriteString(gambaPullUsername + " " + strconv.Itoa(gambaPull) + ";")
 		if err != nil {
 			return err
 		}
