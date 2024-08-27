@@ -39,8 +39,9 @@ func main() {
 	handleError(err)
 
 	// Create bot
-	telegram_token := os.Getenv("TELEGRAM_API_TOKEN")
-	bot, err := tgbotapi.NewBotAPI(telegram_token)
+	telegramToken := os.Getenv("TELEGRAM_API_TOKEN")
+	adminUsername := os.Getenv("ADMIN_USERNAME")
+	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	handleError(err)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -86,6 +87,25 @@ func main() {
 			handleError(err)
 			err = handleTopCommand(bot, update.Message.Chat.ID, update.Message.MessageID, gamblers)
 			handleError(err)
+		}
+
+		if update.Message.Text == "/pulls" {
+			if update.Message.From.UserName == adminUsername {
+				pullStats, err := loadPullStats()
+				handleError(err)
+				counts := make(map[string]int)
+				for _, entry := range pullStats {
+					counts[entry]++
+				}
+				var entries []string
+				for entry, count := range counts {
+					entries = append(entries, fmt.Sprintf("%s: %d", entry, count))
+				}
+				err = sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, strings.Join(entries, "\n"), 20, false)
+			} else {
+				err = sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, "Ты не величайший админ", 2.5, false)
+				handleError(err)
+			}
 		}
 
 		// Handle /notify command
@@ -429,8 +449,98 @@ func notify(bot *tgbotapi.BotAPI, gambler *Gambler) (err error) {
 	_, err = bot.Send(notification)
 	return err
 }
+func loadPullStats() (pullStats []string, err error) {
+	const filename = "gamba_pulls.txt"
+	pullStats = make([]string, 0)
+	var slotMachineValue = map[int][3]string{
+		1:  {"bar", "bar", "bar"},
+		2:  {"grape", "bar", "bar"},
+		3:  {"lemon", "bar", "bar"},
+		4:  {"seven", "bar", "bar"},
+		5:  {"bar", "grape", "bar"},
+		6:  {"grape", "grape", "bar"},
+		7:  {"lemon", "grape", "bar"},
+		8:  {"seven", "grape", "bar"},
+		9:  {"bar", "lemon", "bar"},
+		10: {"grape", "lemon", "bar"},
+		11: {"lemon", "lemon", "bar"},
+		12: {"seven", "lemon", "bar"},
+		13: {"bar", "seven", "bar"},
+		14: {"grape", "seven", "bar"},
+		15: {"lemon", "seven", "bar"},
+		16: {"seven", "seven", "bar"},
+		17: {"bar", "bar", "grape"},
+		18: {"grape", "bar", "grape"},
+		19: {"lemon", "bar", "grape"},
+		20: {"seven", "bar", "grape"},
+		21: {"bar", "grape", "grape"},
+		22: {"grape", "grape", "grape"},
+		23: {"lemon", "grape", "grape"},
+		24: {"seven", "grape", "grape"},
+		25: {"bar", "lemon", "grape"},
+		26: {"grape", "lemon", "grape"},
+		27: {"lemon", "lemon", "grape"},
+		28: {"seven", "lemon", "grape"},
+		29: {"bar", "seven", "grape"},
+		30: {"grape", "seven", "grape"},
+		31: {"lemon", "seven", "grape"},
+		32: {"seven", "seven", "grape"},
+		33: {"bar", "bar", "lemon"},
+		34: {"grape", "bar", "lemon"},
+		35: {"lemon", "bar", "lemon"},
+		36: {"seven", "bar", "lemon"},
+		37: {"bar", "grape", "lemon"},
+		38: {"grape", "grape", "lemon"},
+		39: {"lemon", "grape", "lemon"},
+		40: {"seven", "grape", "lemon"},
+		41: {"bar", "lemon", "lemon"},
+		42: {"grape", "lemon", "lemon"},
+		43: {"lemon", "lemon", "lemon"},
+		44: {"seven", "lemon", "lemon"},
+		45: {"bar", "seven", "lemon"},
+		46: {"grape", "seven", "lemon"},
+		47: {"lemon", "seven", "lemon"},
+		48: {"seven", "seven", "lemon"},
+		49: {"bar", "bar", "seven"},
+		50: {"grape", "bar", "seven"},
+		51: {"lemon", "bar", "seven"},
+		52: {"seven", "bar", "seven"},
+		53: {"bar", "grape", "seven"},
+		54: {"grape", "grape", "seven"},
+		55: {"lemon", "grape", "seven"},
+		56: {"seven", "grape", "seven"},
+		57: {"bar", "lemon", "seven"},
+		58: {"grape", "lemon", "seven"},
+		59: {"lemon", "lemon", "seven"},
+		60: {"seven", "lemon", "seven"},
+		61: {"bar", "seven", "seven"},
+		62: {"grape", "seven", "seven"},
+		63: {"lemon", "seven", "seven"},
+		64: {"seven", "seven", "seven"},
+	}
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Split(scanner.Text(), " ") // Split the line into fields.
+		pulls, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return nil, err
+		}
+		slotValue, ok := slotMachineValue[pulls]
+		if !ok {
+			return nil, fmt.Errorf("invalid pulls value: %d", pulls)
+		}
+		pullStats = append(pullStats, slotValue[0], slotValue[1], slotValue[2])
+	}
+	return pullStats, nil
+}
 func handleError(err error) {
 	if err != nil {
+		log.Println("Handled error!")
 		log.Fatal(err)
 	}
 }
