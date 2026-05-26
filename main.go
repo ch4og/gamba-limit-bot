@@ -6,7 +6,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -36,7 +35,6 @@ func main() {
 
 	// Create bot
 	telegramToken := os.Getenv("TELEGRAM_API_TOKEN")
-	adminUsername := os.Getenv("ADMIN_USERNAME")
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	handleError(err)
 
@@ -84,28 +82,13 @@ func main() {
 		if update.Message.Text == "/top" {
 			gamblers, err := loadGamblerData()
 			handleError(err)
-			topText := getTopGamblers(gamblers, bot, update.Message.Chat.ID)
+			pullStats, err := loadPullStats()
+			handleError(err)
+			topText := getTopGamblers(gamblers, pullStats, bot, update.Message.Chat.ID)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, topText)
+			msg.ParseMode = "Markdown"
 			msg.DisableNotification = true
 			bot.Send(msg)
-		}
-
-		if update.Message.Text == "/pulls" {
-			if update.Message.From.UserName == adminUsername {
-				pullStats, err := loadPullStats()
-				handleError(err)
-				var entries []string
-				for symbol, count := range pullStats {
-					entries = append(entries, fmt.Sprintf("%s: %d", symbol, count))
-				}
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, strings.Join(entries, "\n"))
-				msg.DisableNotification = true
-				bot.Send(msg)
-			} else {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ты не величайший админ")
-				msg.DisableNotification = true
-				bot.Send(msg)
-			}
 		}
 
 		if update.Message.Text == "/notify" {
@@ -219,7 +202,7 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 		return err
 	}
 }
-func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID int64) string {
+func getTopGamblers(gamblers map[int64]*Gambler, pullStats map[string]int, bot *tgbotapi.BotAPI, chatID int64) string {
 	var topGamblers []*Gambler
 
 	// Iterate over the gamblers map and filter out gamblers who are not in this chat.
@@ -253,10 +236,18 @@ func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID in
 		return false
 	})
 
-	var topGamblersText = "Правила гамбы: 3 крутки в час\n\n🎰 ТОП ГАМБЫ\n\n"
+	var topGamblersText = "Правила гамбы: 3 крутки в час"
+	topGamblersText += "\nКоманды гамбы:\n/notify\n/top\n"
+	topGamblersText += "\n🎰 **ТОП ГАМБЫ**\n\n"
 	for _, gambler := range topGamblers {
 		topGamblersText += fmt.Sprintf("%s - %d побед - %d круток\n", gambler.Username, gambler.Wins, gambler.AllGambles)
 	}
+	topGamblersText += "\n```\nВсего выпало:\n"
+	topGamblersText += fmt.Sprintf("BAR: %d\n", pullStats["bar"])
+	topGamblersText += fmt.Sprintf("Виноград: %d\n", pullStats["grape"])
+	topGamblersText += fmt.Sprintf("Лимон: %d\n", pullStats["lemon"])
+	topGamblersText += fmt.Sprintf("Семёрка: %d\n```", pullStats["seven"])
+
 
 	return topGamblersText
 }
