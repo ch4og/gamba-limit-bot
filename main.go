@@ -41,6 +41,7 @@ func main() {
 	handleError(err)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+	botLink := fmt.Sprintf("https://t.me/%s", bot.Self.UserName)
 
 	err = initDB()
 	handleError(err)
@@ -134,8 +135,9 @@ func main() {
 			var msgText string
 			if gambler.NotifyTimer {
 				msgText = fmt.Sprintf(
-					"%s, вы включили уведомления о сбросе таймера гамбы.\n\nНапишите в ЛС боту любое сообщение, чтобы разрешить отправку уведомлений.",
+					"%s, вы включили уведомления о сбросе таймера гамбы.\n\nНапишите в [ЛС боту](%s) любое сообщение, чтобы разрешить отправку уведомлений.",
 					gambler.Username,
+					botLink,
 				)
 			} else {
 				msgText = fmt.Sprintf(
@@ -144,6 +146,7 @@ func main() {
 				)
 			}
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+			msg.ParseMode = "Markdown"
 			msg.DisableNotification = true
 			bot.Send(msg)
 		}
