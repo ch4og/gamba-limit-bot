@@ -6,11 +6,14 @@ import (
 	"math/rand/v2"
 	"os"
 	"sort"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 )
+
+var mu sync.Mutex
 
 // Gambler represents a user who has gambled
 //
@@ -48,8 +51,14 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Second * 20)
+
+			mu.Lock()
 			gamblers, err := loadGamblerData()
-			handleError(err)
+			if err != nil {
+				log.Printf("Failed to load gambler data: %v", err)
+				mu.Unlock()
+				continue
+			}
 			for _, gambler := range gamblers {
 				if gambler.NotifyTimer {
 					sinceGamble := time.Since(time.Unix(gambler.GambleTime, 0))
@@ -59,12 +68,12 @@ func main() {
 							log.Printf("Can't send message to %s", gambler.Username)
 						} else {
 							gambler.Notified = true
+							saveGamblerData(gambler, 0, "")
 						}
-						saveGamblerData(gamblers, 0, "")
 					}
 				}
 			}
-
+			mu.Unlock()
 		}
 	}()
 
@@ -101,6 +110,7 @@ func main() {
 		}
 
 		if update.Message.Text == "/notify" || update.Message.Text == "/notify@"+botUsername {
+			mu.Lock()
 			gamblers, err := loadGamblerData()
 			handleError(err)
 
@@ -116,12 +126,12 @@ func main() {
 					NotifyTimer: false,
 					Notified:    false,
 				}
-				gamblers[update.Message.From.ID] = gambler
 			}
 
 			gambler.NotifyTimer = !gambler.NotifyTimer
 
-			err = saveGamblerData(gamblers, 0, "")
+			err = saveGamblerData(gambler, 0, "")
+			mu.Unlock()
 			handleError(err)
 
 			var msgText string
@@ -162,6 +172,9 @@ func main() {
 }
 
 func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	gamblers, err := loadGamblerData()
 	if err != nil {
 		return
@@ -178,7 +191,6 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 			NotifyTimer: false,
 			Notified:    false,
 		}
-		gamblers[update.Message.From.ID] = gambler
 	}
 
 	timeSince := time.Since(time.Unix(gambler.GambleTime, 0))
@@ -201,17 +213,18 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 
 		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msgText, 5, false)
 		gambler.Gambles = 3
-		return err
-	} else {
-		switch update.Message.Dice.Value {
-		case 1, 22, 43, 64:
-			gambler.Wins++
-		}
-		gambler.AllGambles++
-
-		err := saveGamblerData(gamblers, update.Message.Dice.Value, update.Message.From.UserName)
+		saveGamblerData(gambler, 0, "")
 		return err
 	}
+
+	switch update.Message.Dice.Value {
+	case 1, 22, 43, 64:
+		gambler.Wins++
+	}
+	gambler.AllGambles++
+
+	err = saveGamblerData(gambler, update.Message.Dice.Value, update.Message.From.UserName)
+	return err
 }
 func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID int64) string {
 	var topGamblers []*Gambler

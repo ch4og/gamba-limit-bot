@@ -170,15 +170,13 @@ func loadGamblerData() (map[int64]*Gambler, error) {
 	return gamblers, rows.Err()
 }
 
-func saveGamblerData(gamblers map[int64]*Gambler, gambaPull int, gambaPullUsername string) error {
-	for _, g := range gamblers {
-		_, err := db.Exec(
-			`INSERT OR REPLACE INTO gamblers (user_id, gambles, gamble_time, username, wins, all_gambles, notify_timer, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			g.UserID, g.Gambles, g.GambleTime, g.Username, g.Wins, g.AllGambles, btoi(g.NotifyTimer), btoi(g.Notified),
-		)
-		if err != nil {
-			return err
-		}
+func saveGamblerData(g *Gambler, gambaPull int, gambaPullUsername string) error {
+	_, err := db.Exec(
+		`INSERT OR REPLACE INTO gamblers (user_id, gambles, gamble_time, username, wins, all_gambles, notify_timer, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		g.UserID, g.Gambles, g.GambleTime, g.Username, g.Wins, g.AllGambles, btoi(g.NotifyTimer), btoi(g.Notified),
+	)
+	if err != nil {
+		return err
 	}
 
 	if gambaPull > 0 && gambaPullUsername != "" {
