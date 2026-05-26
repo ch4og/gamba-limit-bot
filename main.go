@@ -32,9 +32,7 @@ type Gambler struct {
 }
 
 func main() {
-	// Load .env file
-	err := godotenv.Load()
-	handleError(err)
+	godotenv.Load()
 
 	// Create bot
 	telegramToken := os.Getenv("TELEGRAM_API_TOKEN")
