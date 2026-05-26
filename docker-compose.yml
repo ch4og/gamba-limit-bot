@@ -1,0 +1,8 @@
+services:
+  bot:
+    pull_policy: always
+    build: .
+    env_file: .env
+    volumes:
+      - ./:/data
+    restart: unless-stopped
