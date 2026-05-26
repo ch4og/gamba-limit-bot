@@ -81,12 +81,13 @@ func main() {
 			continue
 		}
 
-		// Handle /top command
 		if update.Message.Text == "/top" {
 			gamblers, err := loadGamblerData()
 			handleError(err)
-			err = handleTopCommand(bot, update.Message.Chat.ID, update.Message.MessageID, gamblers)
-			handleError(err)
+			topText := getTopGamblers(gamblers, bot, update.Message.Chat.ID)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, topText)
+			msg.DisableNotification = true
+			bot.Send(msg)
 		}
 
 		if update.Message.Text == "/pulls" {
@@ -101,19 +102,20 @@ func main() {
 				for entry, count := range counts {
 					entries = append(entries, fmt.Sprintf("%s: %d", entry, count))
 				}
-				err = sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, strings.Join(entries, "\n"), 20, false)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, strings.Join(entries, "\n"))
+				msg.DisableNotification = true
+				bot.Send(msg)
 			} else {
-				err = sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, "Ты не величайший админ", 2.5, false)
-				handleError(err)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ты не величайший админ")
+				msg.DisableNotification = true
+				bot.Send(msg)
 			}
 		}
 
-		// Handle /notify command
 		if update.Message.Text == "/notify" {
 			gamblers, err := loadGamblerData()
 			handleError(err)
 
-			// Find the user's gambler
 			gambler, ok := gamblers[update.Message.From.ID]
 			if !ok {
 				gambler = &Gambler{
@@ -129,28 +131,26 @@ func main() {
 				gamblers[update.Message.From.ID] = gambler
 			}
 
-			// Toggle the notify timer
 			gambler.NotifyTimer = !gambler.NotifyTimer
 
-			// Save the gambler
 			err = saveGamblerData(gamblers, 0, "")
 			handleError(err)
 
-			// Send a message with a confirmation
-			var msg_text string
+			var msgText string
 			if gambler.NotifyTimer {
-				msg_text = fmt.Sprintf(
+				msgText = fmt.Sprintf(
 					"%s, вы включили уведомления о сбросе таймера гамбы.\n\nНапишите в ЛС боту любое сообщение, чтобы разрешить отправку уведомлений.",
 					gambler.Username,
 				)
 			} else {
-				msg_text = fmt.Sprintf(
+				msgText = fmt.Sprintf(
 					"%s, вы отключили уведомления о сбросе таймера гамбы.",
 					gambler.Username,
 				)
 			}
-			err = sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 20, true)
-			handleError(err)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+			msg.DisableNotification = true
+			bot.Send(msg)
 		}
 
 		// Skip if the message is not a dice or is a forwarded message
@@ -167,15 +167,6 @@ func main() {
 		err = handleGamble(bot, update)
 		handleError(err)
 	}
-}
-
-func handleTopCommand(bot *tgbotapi.BotAPI, chatID int64, msgID int, gamblers map[int64]*Gambler) error {
-	// Generate the top text
-	topText := getTopGamblers(gamblers, bot, chatID)
-
-	// Send the top text with a delay of 60 seconds and handle any errors
-	err := sendMessageAndDeleteAfterDelay(bot, chatID, msgID, topText, 60, false)
-	return err
 }
 
 func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
