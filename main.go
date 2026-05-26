@@ -82,11 +82,19 @@ func main() {
 		if update.Message.Text == "/top" {
 			gamblers, err := loadGamblerData()
 			handleError(err)
+			topText := getTopGamblers(gamblers, bot, update.Message.Chat.ID)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, topText)
+			msg.ParseMode = "HTML"
+			msg.DisableNotification = true
+			bot.Send(msg)
+		}
+
+		if update.Message.Text == "/stats" {
 			pullStats, err := loadPullStats()
 			handleError(err)
-			topText := getTopGamblers(gamblers, pullStats, bot, update.Message.Chat.ID)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, topText)
-			msg.ParseMode = "Markdown"
+			statsText := getDropStats(pullStats)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsText)
+			msg.ParseMode = "HTML"
 			msg.DisableNotification = true
 			bot.Send(msg)
 		}
@@ -202,10 +210,9 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 		return err
 	}
 }
-func getTopGamblers(gamblers map[int64]*Gambler, pullStats map[string]int, bot *tgbotapi.BotAPI, chatID int64) string {
+func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID int64) string {
 	var topGamblers []*Gambler
 
-	// Iterate over the gamblers map and filter out gamblers who are not in this chat.
 	for _, gambler := range gamblers {
 		chatMember, _ := bot.GetChatMember(tgbotapi.GetChatMemberConfig{
 			ChatConfigWithUser: tgbotapi.ChatConfigWithUser{
@@ -218,7 +225,6 @@ func getTopGamblers(gamblers map[int64]*Gambler, pullStats map[string]int, bot *
 		}
 	}
 
-	// Sort the top gamblers based on their win count and winrate.
 	sort.Slice(topGamblers, func(i, j int) bool {
 		if topGamblers[i].Wins == 0 && topGamblers[j].Wins == 0 {
 			return topGamblers[i].AllGambles < topGamblers[j].AllGambles
@@ -226,8 +232,6 @@ func getTopGamblers(gamblers map[int64]*Gambler, pullStats map[string]int, bot *
 		winRateI := float64(topGamblers[i].Wins) / float64(topGamblers[i].AllGambles)
 		winRateJ := float64(topGamblers[j].Wins) / float64(topGamblers[j].AllGambles)
 
-		// If the win count for any of the gamblers is greater than the other, they are greater.
-		// If the win count is equal, compare the win rate, gambler with higher winrate is greater.
 		if topGamblers[i].Wins > topGamblers[j].Wins {
 			return true
 		} else if topGamblers[i].Wins == topGamblers[j].Wins {
@@ -236,20 +240,75 @@ func getTopGamblers(gamblers map[int64]*Gambler, pullStats map[string]int, bot *
 		return false
 	})
 
-	var topGamblersText = "Правила гамбы: 3 крутки в час"
-	topGamblersText += "\nКоманды гамбы:\n/notify\n/top\n"
-	topGamblersText += "\n🎰 **ТОП ГАМБЫ**\n\n"
-	for _, gambler := range topGamblers {
-		topGamblersText += fmt.Sprintf("%s - %d побед - %d круток\n", gambler.Username, gambler.Wins, gambler.AllGambles)
+	sep := "━━━━━━━━━━━━━━━━━━━━━━"
+	var text string
+        text = "<code>"
+	text += sep + "\n"
+	text += "     🎰 <b>ТОП ГАМБЫ</b> 🎰\n"
+	text += sep + "\n\n"
+
+	maxUserLen := 0
+	maxWinsLen := 0
+	maxGamblesLen := 0
+	for _, g := range topGamblers {
+		if l := len(g.Username); l > maxUserLen {
+			maxUserLen = l
+		}
+		if l := len(fmt.Sprintf("%d", g.Wins)); l > maxWinsLen {
+			maxWinsLen = l
+		}
+		if l := len(fmt.Sprintf("%d", g.AllGambles)); l > maxGamblesLen {
+			maxGamblesLen = l
+		}
 	}
-	topGamblersText += "\n```\nВсего выпало:\n"
-	topGamblersText += fmt.Sprintf("BAR: %d\n", pullStats["bar"])
-	topGamblersText += fmt.Sprintf("Виноград: %d\n", pullStats["grape"])
-	topGamblersText += fmt.Sprintf("Лимон: %d\n", pullStats["lemon"])
-	topGamblersText += fmt.Sprintf("Семёрка: %d\n```", pullStats["seven"])
 
+	medals := []string{"🥇", "🥈", "🥉"}
+	for i, gambler := range topGamblers {
+		rank := i + 1
+		var prefix string
+		padding := maxUserLen
+		if rank <= 3 {
+			prefix = medals[rank-1] + " "
+		} else {
+			prefix = fmt.Sprintf("%2d. ", rank)
+		}
 
-	return topGamblersText
+		winRate := 0.0
+		if gambler.AllGambles > 0 {
+			winRate = float64(gambler.Wins) / float64(gambler.AllGambles) * 100
+		}
+		text += fmt.Sprintf("%s%-*s — %*d🏆 / %*d🎰 (%*.1f%%)\n",
+			prefix,
+			padding, gambler.Username,
+			maxWinsLen, gambler.Wins,
+			maxGamblesLen, gambler.AllGambles,
+			5, winRate)
+	}
+
+        text += "</code>"
+	return text
+}
+
+func getDropStats(pullStats map[string]int) string {
+	sep := "━━━━━━━━━━━━━━━━━━━━━━"
+	total := pullStats["bar"] + pullStats["grape"] + pullStats["lemon"] + pullStats["seven"]
+	text := "<code>"
+	text += sep + "\n"
+	text += "📊 <b>СТАТИСТИКА</b>\n"
+	text += sep + "\n"
+	if total > 0 {
+		text += fmt.Sprintf("🍾 BAR       %d (%5.1f%%)\n", pullStats["bar"], float64(pullStats["bar"])/float64(total)*100)
+		text += fmt.Sprintf("🍇 Виноград  %d (%5.1f%%)\n", pullStats["grape"], float64(pullStats["grape"])/float64(total)*100)
+		text += fmt.Sprintf("🍋 Лимон     %d (%5.1f%%)\n", pullStats["lemon"], float64(pullStats["lemon"])/float64(total)*100)
+		text += fmt.Sprintf("7️⃣ Семерка   %d (%5.1f%%)\n", pullStats["seven"], float64(pullStats["seven"])/float64(total)*100)
+	} else {
+		text += fmt.Sprintf("🍾 BAR       %d\n", pullStats["bar"])
+		text += fmt.Sprintf("🍇 Виноград  %d\n", pullStats["grape"])
+		text += fmt.Sprintf("🍋 Лимон     %d\n", pullStats["lemon"])
+		text += fmt.Sprintf("7️⃣ Семерка   %d\n", pullStats["seven"])
+	}
+	text += "</code>"
+	return text
 }
 func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageID int, text string, delay_time float64, isMarkdown bool) error {
 	// Create the message to send
