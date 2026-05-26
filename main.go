@@ -150,6 +150,8 @@ func main() {
 
 		// Skip if the dice emoji is not 🎰
 		if update.Message.Dice.Emoji != "🎰" {
+		        err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, "ЭТО НЕПРАВИЛЬНАЯ ГАМБА У НАС ТОКА СЛОТИКИ", 5, false)
+		        handleError(err)
 			continue
 		}
 
