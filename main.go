@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"math/rand/v2"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -45,6 +43,9 @@ func main() {
 	handleError(err)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	err = initDB()
+	handleError(err)
 
 	go func() {
 		for {
@@ -94,13 +95,9 @@ func main() {
 			if update.Message.From.UserName == adminUsername {
 				pullStats, err := loadPullStats()
 				handleError(err)
-				counts := make(map[string]int)
-				for _, entry := range pullStats {
-					counts[entry]++
-				}
 				var entries []string
-				for entry, count := range counts {
-					entries = append(entries, fmt.Sprintf("%s: %d", entry, count))
+				for symbol, count := range pullStats {
+					entries = append(entries, fmt.Sprintf("%s: %d", symbol, count))
 				}
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, strings.Join(entries, "\n"))
 				msg.DisableNotification = true
@@ -170,7 +167,6 @@ func main() {
 }
 
 func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
-	// Get or create the gambler
 	gamblers, err := loadGamblerData()
 	if err != nil {
 		return
@@ -190,156 +186,37 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 		gamblers[update.Message.From.ID] = gambler
 	}
 
-	// Check if the gambling limit has been reached
 	timeSince := time.Since(time.Unix(gambler.GambleTime, 0))
 	if timeSince.Minutes() < 60 {
-		gambler.Gambles++ // Increment the number of gambles
+		gambler.Gambles++
 		gambler.Notified = false
 	} else {
-		gambler.Gambles = 1 // Reset the number of gambles
+		gambler.Gambles = 1
 		gambler.GambleTime = time.Now().Unix()
 	}
 
-	// Check if the gambling limit has been exceeded
 	if gambler.Gambles > 3 {
-		// Calculate the remaining time
 		minutes := int(60 - timeSince.Minutes())
 		seconds := 60 - (int(timeSince.Seconds()) % 60)
 
-		// Send a message with the remaining time
-		msg_text := fmt.Sprintf(
+		msgText := fmt.Sprintf(
 			"%s, лимит гамбы превышен!\nПравила гамбы: 3 крутки в час\n\nПопробуйте снова через %d минут %d секунд!\n",
 			gambler.Username, minutes, seconds,
 		)
 
-		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 5, false)
-		gambler.Gambles = 3 // Reset the number of gambles
+		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msgText, 5, false)
+		gambler.Gambles = 3
 		return err
 	} else {
-		// Check the dice value and update the gambler's stats
 		switch update.Message.Dice.Value {
 		case 1, 22, 43, 64:
 			gambler.Wins++
 		}
 		gambler.AllGambles++
 
-		// Save the gambler's stats
 		err := saveGamblerData(gamblers, update.Message.Dice.Value, update.Message.From.UserName)
 		return err
 	}
-}
-func saveGamblerData(gamblers map[int64]*Gambler, gambaPull int, gambaPullUsername string) error {
-	// Define the filename for the data file.
-	const filename = "gamba.txt"
-
-	// Create the file for writing.
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	for UserID, gambler := range gamblers {
-		// Format the line to be written to the file.
-		line := fmt.Sprintf("%d %d %d %s %d %d %t %t\n",
-			UserID,
-			gambler.Gambles,
-			gambler.GambleTime,
-			gambler.Username,
-			gambler.Wins,
-			gambler.AllGambles,
-			gambler.NotifyTimer,
-			gambler.Notified,
-		)
-
-		// Write the line to the file.
-		_, err = file.WriteString(line)
-		if err != nil {
-			return err
-		}
-
-	}
-	if gambaPull > 0 && gambaPullUsername != "" {
-		const filename2 = "gamba_pulls.txt"
-		file2, err := os.OpenFile(filename2, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			return err
-		}
-		defer file2.Close()
-		_, err = file2.WriteString(gambaPullUsername + " " + strconv.Itoa(gambaPull) + "\n")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Return no error if the data was successfully saved.
-	return nil
-}
-func loadGamblerData() (map[int64]*Gambler, error) {
-	const filename = "gamba.txt"
-
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	gamblers := make(map[int64]*Gambler)
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), " ") // Split the line into fields.
-
-		// Parse each field into the corresponding type.
-		UserID, err := strconv.ParseInt(fields[0], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-		Gambles, err := strconv.Atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-
-		GambleTime, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-		Wins, err := strconv.Atoi(fields[4])
-		if err != nil {
-			return nil, err
-		}
-
-		AllGambles, err := strconv.Atoi(fields[5])
-		if err != nil {
-			return nil, err
-		}
-
-		NotifyTimer, err := strconv.ParseBool(fields[6])
-		if err != nil {
-			return nil, err
-		}
-
-		Notified, err := strconv.ParseBool(fields[7])
-		if err != nil {
-			return nil, err
-		}
-		// Create a new gambler and add it to the map.
-		gambler := &Gambler{
-			UserID:      UserID,
-			Gambles:     Gambles,
-			GambleTime:  GambleTime,
-			Username:    fields[3],
-			Wins:        Wins,
-			AllGambles:  AllGambles,
-			NotifyTimer: NotifyTimer,
-			Notified:    Notified,
-		}
-		gamblers[UserID] = gambler
-	}
-
-	return gamblers, nil
 }
 func getTopGamblers(gamblers map[int64]*Gambler, bot *tgbotapi.BotAPI, chatID int64) string {
 	var topGamblers []*Gambler
@@ -439,95 +316,6 @@ func notify(bot *tgbotapi.BotAPI, gambler *Gambler) (err error) {
 	notification := tgbotapi.NewMessage(gambler.UserID, msg_text)
 	_, err = bot.Send(notification)
 	return err
-}
-func loadPullStats() (pullStats []string, err error) {
-	const filename = "gamba_pulls.txt"
-	pullStats = make([]string, 0)
-	var slotMachineValue = map[int][3]string{
-		1:  {"bar", "bar", "bar"},
-		2:  {"grape", "bar", "bar"},
-		3:  {"lemon", "bar", "bar"},
-		4:  {"seven", "bar", "bar"},
-		5:  {"bar", "grape", "bar"},
-		6:  {"grape", "grape", "bar"},
-		7:  {"lemon", "grape", "bar"},
-		8:  {"seven", "grape", "bar"},
-		9:  {"bar", "lemon", "bar"},
-		10: {"grape", "lemon", "bar"},
-		11: {"lemon", "lemon", "bar"},
-		12: {"seven", "lemon", "bar"},
-		13: {"bar", "seven", "bar"},
-		14: {"grape", "seven", "bar"},
-		15: {"lemon", "seven", "bar"},
-		16: {"seven", "seven", "bar"},
-		17: {"bar", "bar", "grape"},
-		18: {"grape", "bar", "grape"},
-		19: {"lemon", "bar", "grape"},
-		20: {"seven", "bar", "grape"},
-		21: {"bar", "grape", "grape"},
-		22: {"grape", "grape", "grape"},
-		23: {"lemon", "grape", "grape"},
-		24: {"seven", "grape", "grape"},
-		25: {"bar", "lemon", "grape"},
-		26: {"grape", "lemon", "grape"},
-		27: {"lemon", "lemon", "grape"},
-		28: {"seven", "lemon", "grape"},
-		29: {"bar", "seven", "grape"},
-		30: {"grape", "seven", "grape"},
-		31: {"lemon", "seven", "grape"},
-		32: {"seven", "seven", "grape"},
-		33: {"bar", "bar", "lemon"},
-		34: {"grape", "bar", "lemon"},
-		35: {"lemon", "bar", "lemon"},
-		36: {"seven", "bar", "lemon"},
-		37: {"bar", "grape", "lemon"},
-		38: {"grape", "grape", "lemon"},
-		39: {"lemon", "grape", "lemon"},
-		40: {"seven", "grape", "lemon"},
-		41: {"bar", "lemon", "lemon"},
-		42: {"grape", "lemon", "lemon"},
-		43: {"lemon", "lemon", "lemon"},
-		44: {"seven", "lemon", "lemon"},
-		45: {"bar", "seven", "lemon"},
-		46: {"grape", "seven", "lemon"},
-		47: {"lemon", "seven", "lemon"},
-		48: {"seven", "seven", "lemon"},
-		49: {"bar", "bar", "seven"},
-		50: {"grape", "bar", "seven"},
-		51: {"lemon", "bar", "seven"},
-		52: {"seven", "bar", "seven"},
-		53: {"bar", "grape", "seven"},
-		54: {"grape", "grape", "seven"},
-		55: {"lemon", "grape", "seven"},
-		56: {"seven", "grape", "seven"},
-		57: {"bar", "lemon", "seven"},
-		58: {"grape", "lemon", "seven"},
-		59: {"lemon", "lemon", "seven"},
-		60: {"seven", "lemon", "seven"},
-		61: {"bar", "seven", "seven"},
-		62: {"grape", "seven", "seven"},
-		63: {"lemon", "seven", "seven"},
-		64: {"seven", "seven", "seven"},
-	}
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), " ") // Split the line into fields.
-		pulls, err := strconv.Atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		slotValue, ok := slotMachineValue[pulls]
-		if !ok {
-			return nil, fmt.Errorf("invalid pulls value: %d", pulls)
-		}
-		pullStats = append(pullStats, slotValue[0], slotValue[1], slotValue[2])
-	}
-	return pullStats, nil
 }
 func handleError(err error) {
 	if err != nil {
