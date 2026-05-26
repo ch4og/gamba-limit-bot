@@ -221,7 +221,7 @@ func handleGamble(bot *tgbotapi.BotAPI, update tgbotapi.Update) (err error) {
 			gambler.Username, minutes, seconds,
 		)
 
-		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 2.5, false)
+		err := sendMessageAndDeleteAfterDelay(bot, update.Message.Chat.ID, update.Message.MessageID, msg_text, 5, false)
 		gambler.Gambles = 3 // Reset the number of gambles
 		return err
 	} else {
@@ -404,7 +404,7 @@ func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageI
 	// Delete the original message
 	bot.Send(tgbotapi.NewDeleteMessage(chatID, messageID))
 
-	if rand.IntN(20) == 4 && delay_time == 2.5 {
+	if rand.IntN(20) == 4 && delay_time == 5 {
 		doStickerExist = true
 		stickerset, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{Name: "ChoZaHui_nya_by_fStikBot"})
 		if err != nil {
