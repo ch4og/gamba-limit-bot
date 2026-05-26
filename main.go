@@ -406,7 +406,7 @@ func sendMessageAndDeleteAfterDelay(bot *tgbotapi.BotAPI, chatID int64, messageI
 
 	if rand.IntN(20) == 4 && delay_time == 2.5 {
 		doStickerExist = true
-		stickerset, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{Name: "ch4ogpack_by_fStikBot"})
+		stickerset, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{Name: "ChoZaHui_nya_by_fStikBot"})
 		if err != nil {
 			return err
 		}
