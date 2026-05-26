@@ -38,8 +38,9 @@ func main() {
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	handleError(err)
 
-	log.Printf("Authorized on account %s", bot.Self.UserName)
-	botLink := fmt.Sprintf("https://t.me/%s", bot.Self.UserName)
+	botUsername := bot.Self.UserName
+	log.Printf("Authorized on account %s", botUsername)
+	botLink := fmt.Sprintf("https://t.me/%s", botUsername)
 
 	err = initDB()
 	handleError(err)
@@ -79,7 +80,7 @@ func main() {
 			continue
 		}
 
-		if update.Message.Text == "/top" {
+		if update.Message.Text == "/top" || update.Message.Text == "/top@"+botUsername {
 			gamblers, err := loadGamblerData()
 			handleError(err)
 			topText := getTopGamblers(gamblers, bot, update.Message.Chat.ID)
@@ -89,7 +90,7 @@ func main() {
 			bot.Send(msg)
 		}
 
-		if update.Message.Text == "/stats" {
+		if update.Message.Text == "/stats" || update.Message.Text == "/stats@"+botUsername {
 			pullStats, err := loadPullStats()
 			handleError(err)
 			statsText := getDropStats(pullStats)
@@ -99,7 +100,7 @@ func main() {
 			bot.Send(msg)
 		}
 
-		if update.Message.Text == "/notify" {
+		if update.Message.Text == "/notify" || update.Message.Text == "/notify@"+botUsername {
 			gamblers, err := loadGamblerData()
 			handleError(err)
 
