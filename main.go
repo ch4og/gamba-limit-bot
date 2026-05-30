@@ -89,6 +89,10 @@ func main() {
 			continue
 		}
 
+		if time.Since(update.Message.Time()) > time.Second*60 {
+			continue
+		}
+
 		if update.Message.Text == "/top" || update.Message.Text == "/top@"+botUsername {
 			gamblers, err := loadGamblerData()
 			handleError(err)
